@@ -1,0 +1,20 @@
+[
+  {
+    "id": "1772892878633",
+    "name": "192.168.2.202",
+    "host": "192.168.2.202",
+    "user": "root",
+    "password": "shiyu314",
+    "port": 22,
+    "created": "2026-03-07T14:14:38.633Z"
+  },
+  {
+    "id": "1772893087408",
+    "name": "quming.link",
+    "host": "quming.link",
+    "user": "root",
+    "password": "Shiyu@413",
+    "port": 1985,
+    "created": "2026-03-07T14:18:07.408Z"
+  }
+]

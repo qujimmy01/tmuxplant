@@ -7,6 +7,7 @@
 class TmuxPlantApp {
     constructor() {
         this.sessions = [];
+        this.sshHosts = [];
         this.terminals = new Map(); // tabId -> { terminal, fitAddon, ws, target }
         this.activeTabId = null;
         this.expandedNodes = new Set();
@@ -18,7 +19,7 @@ class TmuxPlantApp {
 
     async init() {
         this.bindEvents();
-        await this.refreshSessions();
+        await Promise.all([this.refreshSessions(), this.refreshSshHosts()]);
         this.startAutoRefresh();
     }
 
@@ -58,9 +59,63 @@ class TmuxPlantApp {
         }
     }
 
+    toggleNode(key) {
+        if (this.expandedNodes.has(key)) {
+            this.expandedNodes.delete(key);
+        } else {
+            this.expandedNodes.add(key);
+        }
+        this.renderSessionTree();
+    }
+
+    groupSessions(sessions) {
+        if (!sessions || sessions.length === 0) return [];
+
+        const groups = new Map();
+        const processed = new Set();
+
+        // Logic: find sessions with common hyphen-delimited prefixes
+        sessions.forEach(s => {
+            const lastHyphen = s.name.lastIndexOf('-');
+            if (lastHyphen > 0) {
+                const prefix = s.name.substring(0, lastHyphen);
+                if (!groups.has(prefix)) groups.set(prefix, []);
+                groups.get(prefix).push(s);
+            }
+        });
+
+        const finalTree = [];
+
+        // Only group if prefix itself exists or there are multiple siblings
+        groups.forEach((members, prefix) => {
+            const prefixAsSession = sessions.find(s => s.name === prefix);
+            if (members.length > 1 || prefixAsSession) {
+                const groupMembers = members.filter(m => m.name !== prefix);
+                if (prefixAsSession) groupMembers.push(prefixAsSession);
+
+                const sortedMembers = groupMembers.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+
+                finalTree.push({
+                    type: 'group',
+                    name: prefix,
+                    sessions: sortedMembers
+                });
+                groupMembers.forEach(m => processed.add(m.name));
+            }
+        });
+
+        // Add sessions that weren't grouped
+        sessions.forEach(s => {
+            if (!processed.has(s.name)) {
+                finalTree.push({ type: 'session', ...s });
+            }
+        });
+
+        return finalTree.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+    }
+
     renderSessionTree() {
         const container = document.getElementById('sessionTree');
-
         if (this.sessions.length === 0) {
             container.innerHTML = `
         <div class="empty-state">
@@ -76,96 +131,342 @@ class TmuxPlantApp {
             return;
         }
 
+        const treeData = this.groupSessions(this.sessions);
         let html = '';
-        for (const session of this.sessions) {
+
+        const renderSingleSession = (session) => {
             const sessionKey = `s:${session.name}`;
             const isExpanded = this.expandedNodes.has(sessionKey);
             const attachedBadge = session.attached
                 ? '<span class="tree-badge attached">attached</span>'
                 : '';
 
-            html += `
-        <div class="tree-item" data-type="session" data-name="${this.esc(session.name)}">
-          <div class="tree-item-header session-header ${this.selectedTarget === session.name ? 'active' : ''}"
-               onclick="app.toggleNode('${sessionKey}')"
-               oncontextmenu="app.showContextMenu(event, 'session', '${this.esc(session.name)}')"
-               ondblclick="app.showRenameModal('session', '${this.esc(session.name)}')">
-            <span class="tree-toggle ${isExpanded ? 'expanded' : ''}">
-              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5l8 7-8 7z"/></svg>
-            </span>
-            <span class="tree-icon session-icon">⬢</span>
-            <span class="tree-label">${this.esc(session.name)}</span>
-            ${attachedBadge}
-          </div>
-          <div class="tree-children ${isExpanded ? '' : 'collapsed'}" style="max-height: ${isExpanded ? '2000px' : '0'}">
-      `;
-
+            let sHtml = `
+                <div class="tree-item" data-type="session" data-name="${this.esc(session.name)}">
+                    <div class="tree-item-header session-header ${this.selectedTarget === session.name ? 'active' : ''}"
+                         onclick="app.toggleNode('${sessionKey}')"
+                         oncontextmenu="app.showContextMenu(event, 'session', '${this.esc(session.name)}')"
+                         ondblclick="app.showRenameModal('session', '${this.esc(session.name)}')">
+                        <span class="tree-toggle ${isExpanded ? 'expanded' : ''}">
+                             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5l8 7-8 7z"/></svg>
+                        </span>
+                        <span class="tree-icon session-icon">⬢</span>
+                        <span class="tree-label">${this.esc(session.name)}</span>
+                        ${attachedBadge}
+                    </div>
+                    <div class="tree-children ${isExpanded ? '' : 'collapsed'}" style="max-height: ${isExpanded ? '2000px' : '0'}">
+            `;
             if (session.windows) {
                 for (const win of session.windows) {
                     const winKey = `w:${session.name}:${win.index}`;
                     const isWinExpanded = this.expandedNodes.has(winKey);
+                    const hasSinglePane = win.panes && win.panes.length === 1;
+                    const firstPane = hasSinglePane ? win.panes[0] : null;
+                    const paneLabel = hasSinglePane ? `<span class="tree-pane-inline">${this.esc(firstPane.currentCommand)}</span>` : '';
+                    const tabId = hasSinglePane ? `tab-${session.name}-${win.index}-${firstPane.index}` : null;
 
-                    html += `
-            <div class="tree-item" data-type="window" data-session="${this.esc(session.name)}" data-index="${win.index}">
-              <div class="tree-item-header window-header"
-                   onclick="app.toggleNode('${winKey}')"
-                   oncontextmenu="app.showContextMenu(event, 'window', '${this.esc(session.name)}', ${win.index})"
-                   ondblclick="app.showRenameModal('window', '${this.esc(session.name)}', ${win.index}, '${this.esc(win.name)}')">
-                <span class="tree-toggle ${isWinExpanded ? 'expanded' : ''}">
-                  <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5l8 7-8 7z"/></svg>
-                </span>
-                <span class="tree-icon window-icon">◆</span>
-                <span class="tree-label">${win.index}:${this.esc(win.name)}</span>
-                ${win.active ? '<span class="tree-badge attached">active</span>' : ''}
-              </div>
-              <div class="tree-children ${isWinExpanded ? '' : 'collapsed'}" style="max-height: ${isWinExpanded ? '2000px' : '0'}">
-          `;
+                    sHtml += `
+                        <div class="tree-item ${hasSinglePane ? 'single-pane' : ''}" data-type="window" data-session="${this.esc(session.name)}" data-index="${win.index}">
+                            <div class="tree-item-header window-header ${hasSinglePane && this.activeTabId === tabId ? 'active' : ''}"
+                                 onclick="${hasSinglePane ? `app.openTerminal('${this.esc(session.name)}', ${win.index}, ${firstPane.index}, '${this.esc(win.name)}')` : `app.toggleNode('${winKey}')`}"
+                                 oncontextmenu="app.showContextMenu(event, 'window', '${this.esc(session.name)}', ${win.index})"
+                                 ondblclick="app.showRenameModal('window', '${this.esc(session.name)}', ${win.index}, '${this.esc(win.name)}')">
+                                <span class="tree-toggle ${isWinExpanded && !hasSinglePane ? 'expanded' : ''}" style="${hasSinglePane ? 'visibility:hidden' : ''}">
+                                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5l8 7-8 7z"/></svg>
+                                </span>
+                                <span class="tree-icon window-icon">◆</span>
+                                <span class="tree-label">${win.index}:${this.esc(win.name)} ${paneLabel}</span>
+                                ${win.active ? '<span class="tree-badge attached">active</span>' : ''}
+                            </div>
+                    `;
 
-                    if (win.panes) {
+                    if (!hasSinglePane && win.panes) {
+                        sHtml += `<div class="tree-children ${isWinExpanded ? '' : 'collapsed'}" style="max-height: ${isWinExpanded ? '2000px' : '0'}">`;
                         for (const pane of win.panes) {
-                            const paneTarget = `${session.name}:${win.index}.${pane.index}`;
-                            const tabId = `tab-${session.name}-${win.index}-${pane.index}`;
+                            const pTarget = `${session.name}:${win.index}.${pane.index}`;
+                            const pTabId = `tab-${session.name}-${win.index}-${pane.index}`;
 
-                            html += `
-                <div class="tree-item" data-type="pane" data-target="${paneTarget}">
-                  <div class="tree-item-header pane-header ${this.activeTabId === tabId ? 'active' : ''}"
-                       onclick="app.openTerminal('${this.esc(session.name)}', ${win.index}, ${pane.index}, '${this.esc(win.name)}')"
-                       oncontextmenu="app.showContextMenu(event, 'pane', '${this.esc(session.name)}', ${win.index}, ${pane.index})">
-                    <span class="tree-icon pane-icon">▸</span>
-                    <span class="tree-label">${pane.id} ${this.esc(pane.currentCommand)}</span>
-                    <span class="tree-badge">${pane.width}×${pane.height}</span>
-                  </div>
-                </div>
-              `;
+                            sHtml += `
+                                <div class="tree-item" data-type="pane" data-target="${pTarget}">
+                                    <div class="tree-item-header pane-header ${this.activeTabId === pTabId ? 'active' : ''}"
+                                         onclick="app.openTerminal('${this.esc(session.name)}', ${win.index}, ${pane.index}, '${this.esc(win.name)}')">
+                                        <span class="tree-icon pane-icon">▸</span>
+                                        <span class="tree-label">${pane.id} ${this.esc(pane.currentCommand)}</span>
+                                    </div>
+                                </div>
+                            `;
                         }
+                        sHtml += `</div>`;
                     }
-
-                    html += `</div></div>`;
+                    sHtml += `</div>`;
                 }
             }
+            sHtml += `</div></div>`;
+            return sHtml;
+        };
 
-            html += `</div></div>`;
+        for (const item of treeData) {
+            if (item.type === 'group') {
+                const groupKey = `g:${item.name}`;
+                const isExpanded = this.expandedNodes.has(groupKey);
+                html += `
+                    <div class="tree-item group-item">
+                        <div class="tree-item-header session-header" onclick="app.toggleNode('${groupKey}')">
+                            <span class="tree-toggle ${isExpanded ? 'expanded' : ''}">
+                                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5l8 7-8 7z"/></svg>
+                            </span>
+                            <span class="tree-icon" style="color:var(--accent-yellow)">📂</span>
+                            <span class="tree-label" style="opacity:0.8">${this.esc(item.name)}</span>
+                            <span class="tree-badge">${item.sessions.length}</span>
+                        </div>
+                        <div class="tree-children ${isExpanded ? '' : 'collapsed'}" style="max-height: ${isExpanded ? '4000px' : '0'}">
+                `;
+                item.sessions.forEach(s => {
+                    html += renderSingleSession(s);
+                });
+                html += `</div></div>`;
+            } else {
+                html += renderSingleSession(item);
+            }
         }
 
         container.innerHTML = html;
     }
 
-    toggleNode(key) {
+    // ============================================================
+    // SSH Hosts
+    // ============================================================
+
+    async refreshSshHosts() {
+        try {
+            const { data } = await this.api('GET', '/ssh');
+            this.sshHosts = data || [];
+            this.renderSshTree();
+        } catch (err) {
+            // Silently fail on refresh
+        }
+    }
+
+    async loadRemoteTmux(hostId) {
+        const host = this.sshHosts.find(h => h.id === hostId);
+        if (!host) return;
+
+        host.loadingRemote = true;
+        this.renderSshTree();
+
+        try {
+            const { data } = await this.api('GET', `/ssh/${hostId}/sessions`);
+            host.remoteSessions = data;
+        } catch (err) {
+            this.toast(`Failed to load tmux from ${host.name}`, 'error');
+            host.remoteSessions = [];
+        } finally {
+            host.loadingRemote = false;
+            this.expandedNodes.add(`ssh-host:${hostId}`);
+            this.renderSshTree();
+        }
+    }
+
+    toggleSshNode(key, hostId) {
         if (this.expandedNodes.has(key)) {
             this.expandedNodes.delete(key);
         } else {
+            if (hostId && !this.expandedNodes.has(key)) {
+                const host = this.sshHosts.find(h => h.id === hostId);
+                if (host && host.remoteSessions === undefined && !host.loadingRemote) {
+                    this.loadRemoteTmux(hostId);
+                    return; // loadRemoteTmux will manually expand after loading
+                }
+            }
             this.expandedNodes.add(key);
         }
-        this.renderSessionTree();
+        this.renderSshTree();
+    }
+
+    renderSshTree() {
+        const container = document.getElementById('sshTree');
+        if (this.sshHosts.length === 0) {
+            container.innerHTML = `
+                <div class="empty-state" style="padding: 1rem 0; text-align: left; opacity: 0.5; font-size: 0.8rem; margin-left:10px;">
+                    No SSH hosts saved
+                </div>`;
+            return;
+        }
+
+        let html = '';
+        for (const host of this.sshHosts) {
+            const target = `ssh:${host.id}`;
+            const tabId = `tab-ssh-${host.id}`;
+            const hostKey = `ssh-host:${host.id}`;
+            const isExpanded = this.expandedNodes.has(hostKey);
+            const isLoading = host.loadingRemote;
+
+            html += `
+                <div class="tree-item" data-type="ssh" data-target="${target}">
+                    <div class="tree-item-header session-header ${this.activeTabId === tabId ? 'active' : ''}"
+                         oncontextmenu="app.showContextMenu(event, 'ssh', '${host.id}')">
+                        <span class="tree-toggle ${isExpanded && !isLoading ? 'expanded' : ''}" onclick="app.toggleSshNode('${hostKey}', '${host.id}')">
+                            ${isLoading
+                    ? '<span style="font-size:10px">⏳</span>'
+                    : '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5l8 7-8 7z"/></svg>'
+                }
+                        </span>
+                        <div class="tree-label-group" onclick="app.openTerminal('SSH', 0, '${host.id}', '${this.esc(host.name)}', true)" style="display:flex;align-items:center;flex:1;gap:6px; cursor:pointer;">
+                            <span class="tree-icon pane-icon" style="font-size:14px">☁</span>
+                            <span class="tree-label" style="font-weight:600">${this.esc(host.name)}</span>
+                            <span style="font-size: 10px; opacity: 0.5; margin-left: auto;">${this.esc(host.user)}@${this.esc(host.host)}</span>
+                        </div>
+                    </div>
+            `;
+
+            if (isExpanded && host.remoteSessions) {
+                html += `<div class="tree-children">`;
+                if (host.remoteSessions.length === 0) {
+                    html += `<div style="padding: 6px 16px; font-size: 11px; opacity: 0.5;">No tmux sessions running.</div>`;
+                }
+
+                const remoteTree = this.groupSessions(host.remoteSessions);
+
+                const renderSingleRemoteSession = (session) => {
+                    const sessionKey = `ssh-s:${host.id}:${session.name}`;
+                    const isSessionExpanded = this.expandedNodes.has(sessionKey);
+                    let sHtml = `
+                        <div class="tree-item">
+                            <div class="tree-item-header session-header" onclick="app.toggleSshNode('${sessionKey}')">
+                                <span class="tree-toggle ${isSessionExpanded ? 'expanded' : ''}">
+                                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5l8 7-8 7z"/></svg>
+                                </span>
+                                <span class="tree-icon session-icon">⬢</span>
+                                <span class="tree-label">${this.esc(session.name)}</span>
+                            </div>
+                            <div class="tree-children ${isSessionExpanded ? '' : 'collapsed'}" style="max-height: ${isSessionExpanded ? '2000px' : '0'}">
+                    `;
+                    if (session.windows) {
+                        for (const win of session.windows) {
+                            const winKey = `ssh-w:${host.id}:${session.name}:${win.index}`;
+                            const isWinExpanded = this.expandedNodes.has(winKey);
+
+                            const hasSinglePane = win.panes && win.panes.length === 1;
+                            const firstPane = hasSinglePane ? win.panes[0] : null;
+                            const paneLabel = hasSinglePane ? `<span class="tree-pane-inline">${this.esc(firstPane.currentCommand)}</span>` : '';
+                            const rTabId = hasSinglePane ? `tab-remote-${host.id}-${session.name}-${win.index}-${firstPane.index}` : null;
+
+                            sHtml += `
+                                <div class="tree-item ${hasSinglePane ? 'single-pane' : ''}">
+                                    <div class="tree-item-header window-header ${hasSinglePane && this.activeTabId === rTabId ? 'active' : ''}" 
+                                         onclick="${hasSinglePane ? `app.openTerminal('${this.esc(session.name)}', ${win.index}, ${firstPane.index}, '${this.esc(win.name)}', false, '${host.id}')` : `app.toggleSshNode('${winKey}')`}">
+                                        <span class="tree-toggle ${isWinExpanded && !hasSinglePane ? 'expanded' : ''}" style="${hasSinglePane ? 'visibility:hidden' : ''}">
+                                            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5l8 7-8 7z"/></svg>
+                                        </span>
+                                        <span class="tree-icon window-icon">◆</span>
+                                        <span class="tree-label">${win.index}:${this.esc(win.name)} ${paneLabel}</span>
+                                        ${win.active ? '<span class="tree-badge attached">active</span>' : ''}
+                                    </div>
+                            `;
+
+                            if (!hasSinglePane && win.panes) {
+                                sHtml += `<div class="tree-children ${isWinExpanded ? '' : 'collapsed'}" style="max-height: ${isWinExpanded ? '2000px' : '0'}">`;
+                                for (const pane of win.panes) {
+                                    const prTabId = `tab-remote-${host.id}-${session.name}-${win.index}-${pane.index}`;
+                                    sHtml += `
+                                        <div class="tree-item">
+                                            <div class="tree-item-header pane-header ${this.activeTabId === prTabId ? 'active' : ''}" 
+                                                 onclick="app.openTerminal('${this.esc(session.name)}', ${win.index}, ${pane.index}, '${this.esc(win.name)}', false, '${host.id}')">
+                                                <span class="tree-icon pane-icon">▸</span>
+                                                <span class="tree-label">${pane.id} ${this.esc(pane.currentCommand)}</span>
+                                            </div>
+                                        </div>
+                                    `;
+                                }
+                                sHtml += `</div>`;
+                            }
+                            sHtml += `</div>`;
+                        }
+                    }
+                    sHtml += `</div></div>`;
+                    return sHtml;
+                };
+
+                for (const item of remoteTree) {
+                    if (item.type === 'group') {
+                        const groupKey = `ssh-g:${host.id}:${item.name}`;
+                        const isExpanded = this.expandedNodes.has(groupKey);
+                        html += `
+                            <div class="tree-item group-item">
+                                <div class="tree-item-header session-header" onclick="app.toggleSshNode('${groupKey}')">
+                                    <span class="tree-toggle ${isExpanded ? 'expanded' : ''}">
+                                        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5l8 7-8 7z"/></svg>
+                                    </span>
+                                    <span class="tree-icon">📂</span>
+                                    <span class="tree-label" style="opacity:0.8">${this.esc(item.name)}</span>
+                                    <span class="tree-badge">${item.sessions.length}</span>
+                                </div>
+                                <div class="tree-children ${isExpanded ? '' : 'collapsed'}" style="max-height: ${isExpanded ? '4000px' : '0'}">
+                        `;
+                        item.sessions.forEach(s => {
+                            html += renderSingleRemoteSession(s);
+                        });
+                        html += `</div></div>`;
+                    } else {
+                        html += renderSingleRemoteSession(item);
+                    }
+                }
+                html += `</div>`;
+            }
+            html += `</div>`;
+        }
+        container.innerHTML = html;
+    }
+
+    showAddSshModal() {
+        this.showModal('Add SSH Host', `
+            <div class="form-group"><label class="form-label">Name (alias)</label><input class="form-input" id="sshName" placeholder="e.g. Prod DB"></div>
+            <div class="form-group"><label class="form-label">Host/IP</label><input class="form-input" id="sshHost" placeholder="e.g. 192.168.1.100" autofocus></div>
+            <div class="form-group"><label class="form-label">User</label><input class="form-input" id="sshUser" placeholder="e.g. root"></div>
+            <div class="form-group"><label class="form-label">Password</label><input class="form-input" id="sshPassword" type="password" placeholder="(Optional) auto-login password"></div>
+            <div class="form-group"><label class="form-label">Port</label><input class="form-input" id="sshPort" placeholder="22" value="22" type="number"></div>
+        `, async () => {
+            const name = document.getElementById('sshName').value.trim();
+            const host = document.getElementById('sshHost').value.trim();
+            const user = document.getElementById('sshUser').value.trim();
+            const password = document.getElementById('sshPassword').value;
+            const port = parseInt(document.getElementById('sshPort').value, 10);
+
+            if (!host) { this.toast('Host/IP is required', 'error'); throw new Error(); }
+
+            await this.api('POST', '/ssh', { name, host, user, password, port });
+            this.toast('SSH Host added', 'success');
+            await this.refreshSshHosts();
+        });
+        setTimeout(() => document.getElementById('sshHost').focus(), 100);
+    }
+
+    async deleteSshHost(id) {
+        if (!confirm('Remove this SSH host?')) return;
+        const tabId = `tab-ssh-${id}`;
+        if (this.terminals.has(tabId)) this.closeTab(tabId);
+
+        await this.api('DELETE', `/ssh/${id}`);
+        this.toast('SSH Host removed', 'success');
+        await this.refreshSshHosts();
     }
 
     // ============================================================
     // Terminal Management
     // ============================================================
 
-    openTerminal(session, windowIndex, paneIndex, windowName) {
-        const target = `${session}:${windowIndex}.${paneIndex}`;
-        const tabId = `tab-${session}-${windowIndex}-${paneIndex}`;
+    openTerminal(session, windowIndex, paneIndex, windowName, isSsh = false, remoteHostId = null) {
+        let target, tabId;
+        if (remoteHostId) {
+            target = `ssh:${remoteHostId}:${session}:${windowIndex}.${paneIndex}`;
+            tabId = `tab-remote-${remoteHostId}-${session}-${windowIndex}-${paneIndex}`;
+        } else if (isSsh) {
+            target = `ssh:${paneIndex}`;
+            tabId = `tab-ssh-${paneIndex}`;
+        } else {
+            target = `${session}:${windowIndex}.${paneIndex}`;
+            tabId = `tab-${session}-${windowIndex}-${paneIndex}`;
+        }
 
         // If tab already exists, just activate it
         if (this.terminals.has(tabId)) {
@@ -184,8 +485,18 @@ class TmuxPlantApp {
         const tab = document.createElement('button');
         tab.className = 'terminal-tab';
         tab.id = tabId;
+
+        let tabLabel = '';
+        if (remoteHostId) {
+            tabLabel = `☁ ${session}:${windowIndex}.${paneIndex}`;
+        } else if (isSsh) {
+            tabLabel = `SSH: ${windowName}`;
+        } else {
+            tabLabel = `${session}:${windowIndex}.${paneIndex}`;
+        }
+
         tab.innerHTML = `
-      <span>${session}:${windowIndex}.${paneIndex}</span>
+      <span>${tabLabel}</span>
       <span class="tab-close" onclick="event.stopPropagation(); app.closeTab('${tabId}')">&times;</span>
     `;
         tab.onclick = () => this.activateTab(tabId);
@@ -311,14 +622,18 @@ class TmuxPlantApp {
             windowIndex,
             paneIndex,
             windowName,
+            isSsh,
+            remoteHostId
         });
 
         this.activateTab(tabId);
 
         // Expand session tree nodes
-        this.expandedNodes.add(`s:${session}`);
-        this.expandedNodes.add(`w:${session}:${windowIndex}`);
-        this.renderSessionTree();
+        if (!remoteHostId && !isSsh) {
+            this.expandedNodes.add(`s:${session}`);
+            this.expandedNodes.add(`w:${session}:${windowIndex}`);
+            this.renderSessionTree();
+        }
     }
 
     activateTab(tabId) {
@@ -346,15 +661,26 @@ class TmuxPlantApp {
             }, 50);
 
             // Update status bar
-            document.getElementById('statusSession').textContent = `⬢ ${termInfo.session}`;
-            document.getElementById('statusWindow').textContent = `◆ ${termInfo.windowIndex}:${termInfo.windowName || ''}`;
-            document.getElementById('statusPane').textContent = `▸ pane ${termInfo.paneIndex}`;
+            if (termInfo.remoteHostId) {
+                document.getElementById('statusSession').textContent = `☁ ${termInfo.session}`;
+                document.getElementById('statusWindow').textContent = `◆ ${termInfo.windowIndex}:${termInfo.windowName || ''}`;
+                document.getElementById('statusPane').textContent = `▸ pane ${termInfo.paneIndex}`;
+            } else if (termInfo.isSsh) {
+                document.getElementById('statusSession').textContent = `☁ ${termInfo.windowName}`;
+                document.getElementById('statusWindow').textContent = `SSH Connection`;
+                document.getElementById('statusPane').textContent = '';
+            } else {
+                document.getElementById('statusSession').textContent = `⬢ ${termInfo.session}`;
+                document.getElementById('statusWindow').textContent = `◆ ${termInfo.windowIndex}:${termInfo.windowName || ''}`;
+                document.getElementById('statusPane').textContent = `▸ pane ${termInfo.paneIndex}`;
+            }
             document.getElementById('statusSize').textContent = `${termInfo.terminal.cols}×${termInfo.terminal.rows}`;
 
             this.selectedTarget = termInfo.session;
         }
 
         this.renderSessionTree();
+        this.renderSshTree();
     }
 
     closeTab(tabId) {
@@ -411,7 +737,7 @@ class TmuxPlantApp {
     }
 
     async killSession(name) {
-        if (!confirm(`Kill session "${name}"? All windows and panes will be destroyed.`)) return;
+        if (!confirm(`Kill session "${name}" ? All windows and panes will be destroyed.`)) return;
 
         // Close any open tabs for this session
         for (const [tabId, info] of this.terminals) {
@@ -616,6 +942,17 @@ class TmuxPlantApp {
           <span class="context-menu-icon">✕</span> Kill Pane
         </button>
       `;
+        } else if (type === 'ssh') {
+            const sshId = session; // overloaded arg
+            items = `
+                <button class="context-menu-item" onclick="app.openTerminal('SSH', 0, '${sshId}', '', true)">
+                  <span class="context-menu-icon">☁</span> Open Terminal
+                </button>
+                <div class="context-menu-divider"></div>
+                <button class="context-menu-item danger" onclick="app.deleteSshHost('${sshId}')">
+                  <span class="context-menu-icon">✕</span> Delete Host
+                </button>
+            `;
         }
 
         menu.innerHTML = items;

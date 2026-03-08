@@ -2,6 +2,7 @@
 
 const express = require('express');
 const tmux = require('./tmux-service');
+const sshStore = require('./ssh-store');
 const router = express.Router();
 
 // ========== Sessions ==========
@@ -201,6 +202,56 @@ router.get('/capture/:session/:window/:pane', (req, res) => {
             req.query.lines || 50
         );
         res.json({ success: true, data: content });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+const remoteTmux = require('./remote-tmux-service');
+
+// ========== SSH Hosts ==========
+
+router.get('/ssh', (req, res) => {
+    try {
+        res.json({ success: true, data: sshStore.getHosts() });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * GET /api/ssh/:id/sessions — list remote tmux sessions
+ */
+router.get('/ssh/:id/sessions', async (req, res) => {
+    try {
+        const sessions = await remoteTmux.listSessions(req.params.id);
+        res.json({ success: true, data: sessions });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+router.post('/ssh', (req, res) => {
+    try {
+        const host = sshStore.addHost(req.body);
+        res.json({ success: true, data: host });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+router.put('/ssh/:id', (req, res) => {
+    try {
+        const host = sshStore.updateHost(req.params.id, req.body);
+        res.json({ success: true, data: host });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+router.delete('/ssh/:id', (req, res) => {
+    try {
+        sshStore.deleteHost(req.params.id);
+        res.json({ success: true });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }

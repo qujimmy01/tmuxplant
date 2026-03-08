@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  tmuxplant:
+    build: .
+    image: tmuxplant:latest
+    container_name: tmuxplant
+    ports:
+      - "3001:3001"
+    # Allow the container to access the host's tmux socket
+    volumes:
+      - /tmp/.tmux-1000:/tmp/.tmux-1000
+      - /tmp/.tmux-0:/tmp/.tmux-0
+    # Run with host network to access host tmux server
+    network_mode: host
+    environment:
+      - PORT=3001
+    restart: unless-stopped
