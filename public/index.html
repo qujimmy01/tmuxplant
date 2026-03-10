@@ -73,7 +73,13 @@
             <aside class="sidebar" id="sidebar">
                 <div class="sidebar-header">
                     <h2 class="sidebar-title">Sessions</h2>
-                    <span class="session-count" id="sessionCount">0</span>
+                    <div class="sidebar-tools">
+                        <label class="toggle-inline" title="Show only active(attached) sessions">
+                            <input type="checkbox" id="filterActiveOnly">
+                            <span>Active Only</span>
+                        </label>
+                        <span class="session-count" id="sessionCount">0</span>
+                    </div>
                 </div>
                 <div class="session-tree" id="sessionTree">
                     <div class="empty-state">

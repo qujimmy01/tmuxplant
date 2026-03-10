@@ -310,6 +310,25 @@ body {
   color: var(--text-secondary);
 }
 
+.sidebar-tools {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.toggle-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  color: var(--text-muted);
+  user-select: none;
+}
+
+.toggle-inline input {
+  accent-color: var(--accent-cyan);
+}
+
 .session-tree {
   flex: 1;
   overflow-y: auto;

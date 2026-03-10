@@ -13,6 +13,7 @@ class TmuxPlantApp {
         this.expandedNodes = new Set();
         this.refreshInterval = null;
         this.selectedTarget = null;
+        this.filterActiveOnly = false;
 
         this.init();
     }
@@ -53,10 +54,15 @@ class TmuxPlantApp {
             const { data } = await this.api('GET', '/sessions');
             this.sessions = data || [];
             this.renderSessionTree();
-            document.getElementById('sessionCount').textContent = this.sessions.length;
+            document.getElementById('sessionCount').textContent = this.getVisibleSessions().length;
         } catch (err) {
             // Silently fail on refresh
         }
+    }
+
+    getVisibleSessions() {
+        if (!this.filterActiveOnly) return this.sessions;
+        return this.sessions.filter((session) => session.attached);
     }
 
     toggleNode(key) {
@@ -116,7 +122,9 @@ class TmuxPlantApp {
 
     renderSessionTree() {
         const container = document.getElementById('sessionTree');
-        if (this.sessions.length === 0) {
+                const visibleSessions = this.getVisibleSessions();
+
+                if (visibleSessions.length === 0) {
             container.innerHTML = `
         <div class="empty-state">
           <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" opacity="0.3">
@@ -124,14 +132,14 @@ class TmuxPlantApp {
             <line x1="3" y1="9" x2="21" y2="9"/>
             <line x1="9" y1="21" x2="9" y2="9"/>
           </svg>
-          <p>No tmux sessions found</p>
+                    <p>${this.filterActiveOnly ? 'No active sessions found' : 'No tmux sessions found'}</p>
           <button class="btn-small" onclick="app.showNewSessionModal()">Create Session</button>
         </div>
       `;
             return;
         }
 
-        const treeData = this.groupSessions(this.sessions);
+                const treeData = this.groupSessions(visibleSessions);
         let html = '';
 
         const renderSingleSession = (session) => {
@@ -1053,6 +1061,16 @@ class TmuxPlantApp {
             this.refreshSessions();
             this.toast('Sessions refreshed', 'info');
         };
+
+        const activeOnlyCheckbox = document.getElementById('filterActiveOnly');
+        if (activeOnlyCheckbox) {
+            activeOnlyCheckbox.checked = this.filterActiveOnly;
+            activeOnlyCheckbox.onchange = () => {
+                this.filterActiveOnly = activeOnlyCheckbox.checked;
+                this.renderSessionTree();
+                document.getElementById('sessionCount').textContent = this.getVisibleSessions().length;
+            };
+        }
 
         // Modal close
         document.getElementById('modalClose').onclick = () => this.hideModal();
