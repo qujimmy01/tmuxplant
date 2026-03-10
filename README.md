@@ -28,6 +28,7 @@ TmuxPlant is a web-based management interface for [tmux](https://github.com/tmux
 - 📑 **Multi-Tab** — Open multiple terminal tabs independently
 - 🔄 **Auto Refresh** — Session tree syncs with tmux every 5 seconds
 - ↔️ **Resizable Sidebar** — Drag to adjust the sidebar width
+- 🧰 **Lightweight CLI Page** — Open `/cli` for a minimal terminal (local shell by default, optional SSH)
 
 ### Requirements
 

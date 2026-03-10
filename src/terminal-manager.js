@@ -1,6 +1,7 @@
 'use strict';
 
 const pty = require('node-pty');
+const fs = require('fs');
 
 class TerminalManager {
     constructor() {
@@ -11,7 +12,7 @@ class TerminalManager {
     /**
      * Create a new PTY process attached to a tmux pane and bind it to a WebSocket
      */
-    attach(ws, target, cols = 80, rows = 24) {
+    attach(ws, target, cols = 80, rows = 24, sshOptions = null) {
         // If this ws already has a terminal, clean it up first
         this.detach(ws);
 
@@ -20,13 +21,39 @@ class TerminalManager {
         let sshPassword = '';
         let outputBuffer = '';
 
-        if (target.startsWith('ssh:')) {
+        if (target === 'local') {
+            const shell = this.resolveLocalShell();
+
+            try {
+                ws.send(JSON.stringify({ type: 'output', data: `\r\n\x1b[36mStarting local shell: ${shell}\x1b[0m\r\n` }));
+            } catch (e) { }
+
+            ptyProcess = pty.spawn(shell, [], {
+                name: 'xterm-256color',
+                cols,
+                rows,
+                cwd: process.env.HOME || process.cwd(),
+                env: { ...process.env, TERM: 'xterm-256color' },
+            });
+        } else if (target.startsWith('ssh:')) {
             const parts = target.split(':');
             const sshId = parts[1];
             const tmuxTarget = parts.length > 2 ? parts.slice(2).join(':') : '';
 
-            const sshStore = require('./ssh-store');
-            const hostInfo = sshStore.getHosts().find(h => h.id === sshId);
+            let hostInfo;
+            if (sshId === 'direct' && sshOptions && sshOptions.host) {
+                hostInfo = {
+                    id: 'direct',
+                    name: sshOptions.name || sshOptions.host,
+                    host: sshOptions.host,
+                    user: sshOptions.user || process.env.USER,
+                    password: sshOptions.password || '',
+                    port: parseInt(sshOptions.port, 10) || 22,
+                };
+            } else {
+                const sshStore = require('./ssh-store');
+                hostInfo = sshStore.getHosts().find(h => h.id === sshId);
+            }
 
             if (!hostInfo) {
                 try {
@@ -128,6 +155,14 @@ class TerminalManager {
         return ptyProcess;
     }
 
+    resolveLocalShell() {
+        const candidates = [process.env.SHELL, '/bin/zsh', '/bin/bash', '/bin/sh'].filter(Boolean);
+        for (const shell of candidates) {
+            if (fs.existsSync(shell)) return shell;
+        }
+        return '/bin/sh';
+    }
+
     /**
      * Handle incoming WebSocket messages
      */
@@ -138,7 +173,7 @@ class TerminalManager {
             // 'attach' must be handled BEFORE the terminal guard,
             // because it is the message that CREATES the terminal entry.
             if (msg.type === 'attach') {
-                this.attach(ws, msg.target, msg.cols || 80, msg.rows || 24);
+                this.attach(ws, msg.target, msg.cols || 80, msg.rows || 24, msg.ssh || null);
                 return;
             }
 

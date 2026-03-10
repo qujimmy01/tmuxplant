@@ -17,6 +17,11 @@ app.use(express.json());
 // Serve static files from "public" directory
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Lightweight CLI tool page
+app.get('/cli', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'cli.html'));
+});
+
 // API routes
 app.use('/api', apiRoutes);
 

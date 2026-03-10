@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TmuxPlant CLI</title>
+  <meta name="description" content="Lightweight web terminal for local shell and SSH">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css">
+  <link rel="stylesheet" href="/css/cli.css">
+</head>
+
+<body>
+  <div class="cli-page">
+    <header class="cli-header">
+      <div class="brand">
+        <span class="leaf">🌿</span>
+        <div>
+          <h1>TmuxPlant CLI</h1>
+          <p>Simple terminal tool</p>
+        </div>
+      </div>
+      <a class="back-link" href="/">Back to Main</a>
+    </header>
+
+    <section class="toolbar">
+      <label>
+        Target
+        <select id="targetMode">
+          <option value="local" selected>Local Shell</option>
+          <option value="saved-ssh">Saved SSH Host</option>
+          <option value="direct-ssh">Direct SSH</option>
+        </select>
+      </label>
+
+      <label id="savedSshWrap" class="hidden">
+        Host
+        <select id="savedSshSelect"></select>
+      </label>
+
+      <div id="directSshWrap" class="direct-grid hidden">
+        <label>
+          Host
+          <input id="directHost" placeholder="192.168.1.100">
+        </label>
+        <label>
+          User
+          <input id="directUser" placeholder="root">
+        </label>
+        <label>
+          Password
+          <input id="directPassword" type="password" placeholder="optional">
+        </label>
+        <label>
+          Port
+          <input id="directPort" type="number" value="22">
+        </label>
+      </div>
+
+      <div class="toolbar-actions">
+        <button id="connectBtn">Connect</button>
+        <button id="disconnectBtn" class="ghost">Disconnect</button>
+        <button id="clearBtn" class="ghost">Clear</button>
+        <button id="focusBtn" class="ghost" title="Hide all UI except terminal">Focus</button>
+      </div>
+    </section>
+
+    <section class="terminal-shell">
+      <div class="terminal-status" id="statusText">Idle</div>
+      <div id="terminal"></div>
+    </section>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
+  <script src="/js/cli.js"></script>
+</body>
+
+</html>
