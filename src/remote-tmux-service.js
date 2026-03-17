@@ -5,6 +5,15 @@ const sshStore = require('./ssh-store');
 const fs = require('fs');
 
 class RemoteTmuxService {
+    isIgnorableTmuxError(msg) {
+        const text = (msg || '').toLowerCase();
+        return text.includes('no server running')
+            || text.includes('no current')
+            || text.includes("can't find session")
+            || text.includes('error connecting to')
+            || text.includes('/tmp/tmux-');
+    }
+
     /**
      * Establish SSH connection and run a command, returning stdout
      */
@@ -50,7 +59,7 @@ class RemoteTmuxService {
                         console.log(`[SSH DONE] ${hostInfo.name} exit:${code} outputLength:${output.length}`);
                         if (code !== 0) {
                             const errStr = errorOutput || output;
-                            if (errStr.includes('no server running') || errStr.includes('no current') || errStr.includes("can't find session")) {
+                            if (this.isIgnorableTmuxError(errStr)) {
                                 return resolve('');
                             }
                             return reject(new Error(`Command failed on ${hostInfo.name}: ${errStr.trim()}`));

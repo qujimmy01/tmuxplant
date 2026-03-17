@@ -1,0 +1,16 @@
+module.exports = {
+  listSessions: () => [{ id: 's1', name: 'session1', windowCount: 1, attached: false, created: new Date().toISOString(), windows: [] }],
+  newSession: (name) => [{ id: 's1', name: name || 'session1' }],
+  killSession: () => true,
+  renameSession: () => true,
+  newWindow: () => [{ id: 'w1', index: 0, name: 'win1', active: true, paneCount: 1, panes: [] }],
+  killWindow: () => true,
+  renameWindow: () => true,
+  selectWindow: () => true,
+  splitPane: () => [{ id: 'p1', index: 0, active: true }],
+  killPane: () => true,
+  selectPane: () => true,
+  sendKeys: () => true,
+  resizePane: () => true,
+  capturePane: () => 'captured content',
+};

@@ -3,6 +3,15 @@
 const { execSync } = require('child_process');
 
 class TmuxService {
+  isIgnorableTmuxError(msg) {
+    const text = (msg || '').toLowerCase();
+    return text.includes('no server running')
+      || text.includes('no current')
+      || text.includes("can't find session")
+      || text.includes('error connecting to')
+      || text.includes('/tmp/tmux-');
+  }
+
   /**
    * Execute a tmux command and return stdout
    */
@@ -15,7 +24,7 @@ class TmuxService {
       return result.trim();
     } catch (err) {
       const msg = (err.stderr || err.message || '').toString();
-      if (msg.includes('no server running') || msg.includes('no current') || msg.includes('can\'t find session')) {
+      if (this.isIgnorableTmuxError(msg)) {
         return '';
       }
       throw new Error(msg || err.message);
