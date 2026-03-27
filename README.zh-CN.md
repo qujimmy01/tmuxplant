@@ -29,6 +29,7 @@ TmuxPlant 是一个基于 Web 的 [tmux](https://github.com/tmux/tmux) 管理界
 - 🔄 **自动刷新** — 每 5 秒自动同步 tmux 状态
 - ↔️ **可调侧边栏** — 拖拽调整侧边栏宽度
 - 🧰 **轻量 CLI 子页面** — 访问 `/cli` 使用简洁终端（默认本地命令行，可切 SSH）
+- 🔐 **登录认证** — 用户名/密码登录，bcrypt 加密存储，Session 保护，暴力破解自动锁定
 
 ### 环境要求
 
@@ -43,9 +44,57 @@ TmuxPlant 是一个基于 Web 的 [tmux](https://github.com/tmux/tmux) 管理界
 ```bash
 cd tmuxplant
 npm install
+
+# （首次运行）设置你自己的登录账号和密码
+npm run set-password
+
 node server.js
-# 浏览器打开 http://localhost:3001
+# 浏览器打开 http://localhost:3002 — 将自动跳转到登录页
 ```
+
+> 若跳过 `set-password`，默认账号为 **admin**，默认密码为 **tmuxplant**，请尽快修改。
+
+### 登录认证
+
+TmuxPlant 对所有页面、API 接口和 WebSocket 连接均启用了基于 Session 的登录保护。
+
+**随时修改账号密码：**
+
+```bash
+npm run set-password
+# 或
+node scripts/set-password.js
+```
+
+该交互工具会：
+- 提示输入新用户名和密码（输入时以 `*` 掩码显示）
+- 要求二次确认密码，防止误输
+- 以 bcrypt（cost=12）哈希加密写入 `data/auth.json`，**从不保存明文密码**
+- 保留原有 sessionSecret，不会使现有登录状态失效
+
+**配置文件** `data/auth.json`：
+
+```json
+{
+  "username": "admin",
+  "passwordHash": "$2b$12$...",
+  "sessionSecret": "<随机64位十六进制字符串>"
+}
+```
+
+> `data/auth.json` 已加入 `.gitignore`，不会被提交到代码仓库。
+
+**安全特性一览：**
+
+| 特性 | 说明 |
+|---|---|
+| 密码存储 | bcrypt 哈希（cost=12），从不保存明文 |
+| Session Cookie | HttpOnly、SameSite=lax、有效期 8 小时 |
+| 暴力破解防护 | 同一 IP 失败 10 次后锁定 15 分钟 |
+| 用户枚举防护 | 用户名比对采用常量时间算法，防止时序攻击 |
+| Session 固定攻击防护 | 登录成功后自动更换 Session ID |
+| WebSocket 保护 | 升级握手时校验 Session Cookie，未登录返回 401 |
+| 前端自动跳转 | API 返回 401 时浏览器自动跳转到 `/login` |
 
 ### 使用说明
 
@@ -77,10 +126,12 @@ node server.js
 
 ```
 浏览器（xterm.js + WebSocket）
-      ↕  HTTP + WS
+      ↕  HTTP + WS（携带 Session Cookie）
 Node.js 服务端
-  ├── Express（REST API）
-  ├── ws（WebSocket 服务器）
+  ├── express-session（Cookie 会话管理）
+  ├── auth.js（登录、bcrypt 校验、频率限制）
+  ├── Express（REST API — 需登录）
+  ├── ws（WebSocket 服务器 — 握手时校验 Session）
   └── node-pty（PTY 桥接）
       ↕  CLI 调用
 tmux
@@ -90,16 +141,24 @@ tmux
 
 ```
 tmuxplant/
-├── server.js                    # 入口：Express + WebSocket 服务
+├── server.js                    # 入口：Express + Session + WebSocket 服务
 ├── package.json
+├── scripts/
+│   └── set-password.js          # 交互式修改账号密码工具
+├── data/
+│   ├── auth.json                # 登录凭据（用户名 + bcrypt hash + session secret）
+│   └── ssh-hosts.json           # SSH 主机配置
 ├── src/
+│   ├── auth.js                  # 认证中间件（登录、登出、会话校验）
 │   ├── tmux-service.js          # tmux CLI 封装（CRUD 操作）
 │   ├── routes.js                # REST API 路由
 │   └── terminal-manager.js      # WebSocket ↔ PTY 桥接管理
 └── public/
     ├── index.html               # 主页面（侧边栏 + 终端 + 弹窗）
+    ├── login.html               # 登录页面
     ├── css/style.css            # 暗色终端主题样式
-    └── js/app.js                # 前端逻辑
+    ├── css/login.css            # 登录页样式
+    └── js/app.js                # 前端逻辑（含 401 跳转 + 退出按钮）
 ```
 
 ### License

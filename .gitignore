@@ -1,1 +1,4 @@
 /node_modules
+# auth config contains password hash — do not commit
+/data/auth.json
+test/*

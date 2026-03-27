@@ -167,35 +167,55 @@ class TerminalManager {
      * Handle incoming WebSocket messages
      */
     handleMessage(ws, message) {
+        // Support both JSON control messages and raw string input from clients.
+        // If message is JSON, handle control actions (attach/resize/input).
+        // If message is plain text (non-JSON) and a terminal exists, treat it as raw input.
+        let msg = null;
         try {
-            const msg = JSON.parse(message);
+            msg = JSON.parse(message);
+        } catch (err) {
+            // Not JSON — will be treated as raw input below if terminal is attached
+        }
 
-            // 'attach' must be handled BEFORE the terminal guard,
-            // because it is the message that CREATES the terminal entry.
-            if (msg.type === 'attach') {
+        // Handle attach messages first (they create the terminal entry)
+        if (msg && msg.type === 'attach') {
+            try {
                 this.attach(ws, msg.target, msg.cols || 80, msg.rows || 24, msg.ssh || null);
-                return;
+            } catch (e) {
+                console.error('Attach error:', e && e.message ? e.message : e);
             }
+            return;
+        }
 
-            const terminal = this.terminals.get(ws);
-            if (!terminal) return;
+        const terminal = this.terminals.get(ws);
+        if (!terminal) {
+            // If there's no terminal and message isn't JSON attach, ignore silently
+            return;
+        }
 
+        if (msg) {
+            // JSON control message
             switch (msg.type) {
                 case 'input':
-                    terminal.ptyProcess.write(msg.data);
+                    try { terminal.ptyProcess.write(msg.data); } catch (e) { }
                     break;
 
                 case 'resize':
                     if (msg.cols && msg.rows) {
-                        terminal.ptyProcess.resize(msg.cols, msg.rows);
+                        try { terminal.ptyProcess.resize(msg.cols, msg.rows); } catch (e) { }
                     }
                     break;
 
                 default:
                     break;
             }
-        } catch (err) {
-            console.error('Terminal message error:', err.message);
+        } else {
+            // Non-JSON: treat as raw input to the terminal
+            try {
+                terminal.ptyProcess.write(message);
+            } catch (e) {
+                // ignore write errors
+            }
         }
     }
 

@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TmuxPlant — 登录</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/css/login.css">
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-card">
+            <div class="login-logo">
+                <span class="logo-icon">🌿</span>
+                <h1 class="logo-text">TmuxPlant</h1>
+                <p class="logo-subtitle">Tmux Web Manager</p>
+            </div>
+
+            <form class="login-form" id="loginForm" autocomplete="off">
+                <div class="form-group">
+                    <label for="username" class="form-label">用户名</label>
+                    <input
+                        type="text"
+                        id="username"
+                        name="username"
+                        class="form-input"
+                        placeholder="admin"
+                        autocomplete="username"
+                        required
+                        autofocus
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label for="password" class="form-label">密码</label>
+                    <div class="input-wrapper">
+                        <input
+                            type="password"
+                            id="password"
+                            name="password"
+                            class="form-input"
+                            placeholder="••••••••"
+                            autocomplete="current-password"
+                            required
+                        >
+                        <button type="button" class="toggle-password" id="togglePassword" aria-label="显示/隐藏密码">
+                            <svg id="eyeIcon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                                <circle cx="12" cy="12" r="3"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="form-error" id="errorMsg" aria-live="polite"></div>
+
+                <button type="submit" class="btn-login" id="submitBtn">
+                    <span class="btn-text">登录</span>
+                    <span class="btn-spinner" id="spinner" hidden>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+                        </svg>
+                    </span>
+                </button>
+            </form>
+
+            <p class="login-hint">连接到本地 tmux 会话管理服务</p>
+        </div>
+    </div>
+
+    <script>
+        const form = document.getElementById('loginForm');
+        const errorMsg = document.getElementById('errorMsg');
+        const submitBtn = document.getElementById('submitBtn');
+        const spinner = document.getElementById('spinner');
+        const btnText = submitBtn.querySelector('.btn-text');
+        const togglePassword = document.getElementById('togglePassword');
+        const passwordInput = document.getElementById('password');
+
+        // Toggle password visibility
+        togglePassword.addEventListener('click', () => {
+            const isHidden = passwordInput.type === 'password';
+            passwordInput.type = isHidden ? 'text' : 'password';
+            togglePassword.setAttribute('aria-label', isHidden ? '隐藏密码' : '显示密码');
+        });
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            errorMsg.textContent = '';
+            submitBtn.disabled = true;
+            spinner.hidden = false;
+            btnText.textContent = '验证中…';
+
+            const username = document.getElementById('username').value.trim();
+            const password = passwordInput.value;
+
+            try {
+                const res = await fetch('/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    window.location.href = '/';
+                } else {
+                    errorMsg.textContent = data.error || '登录失败，请重试';
+                    passwordInput.value = '';
+                    passwordInput.focus();
+                }
+            } catch {
+                errorMsg.textContent = '网络错误，请检查连接后重试';
+            } finally {
+                submitBtn.disabled = false;
+                spinner.hidden = true;
+                btnText.textContent = '登录';
+            }
+        });
+    </script>
+</body>
+</html>

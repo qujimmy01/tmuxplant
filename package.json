@@ -6,10 +6,16 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
-    "test": "jest --runInBand"
+    "test": "jest --runInBand",
+    "ui-test": "node test/ui.test.js",
+    "ui-e2e": "node test/ui.e2e.test.js",
+    "set-password": "node scripts/set-password.js",
+    "postinstall": "find node_modules/node-pty/prebuilds -name 'spawn-helper' -exec chmod +x {} + 2>/dev/null || true"
   },
   "dependencies": {
+    "bcryptjs": "^3.0.3",
     "express": "^4.18.2",
+    "express-session": "^1.19.0",
     "node-pty": "^1.1.0",
     "ssh2": "^1.17.0",
     "ws": "^8.16.0"
@@ -17,6 +23,7 @@
   "devDependencies": {
     "eslint": "^10.0.3",
     "jest": "^30.3.0",
+    "puppeteer": "^20.9.0",
     "supertest": "^7.2.2"
   }
 }

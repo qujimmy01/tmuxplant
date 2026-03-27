@@ -36,6 +36,10 @@ class TmuxPlantApp {
             };
             if (body) opts.body = JSON.stringify(body);
             const res = await fetch(`/api${path}`, opts);
+            if (res.status === 401) {
+                window.location.href = '/login';
+                return;
+            }
             const data = await res.json();
             if (!data.success) throw new Error(data.error || 'API error');
             return data;
@@ -1060,6 +1064,10 @@ class TmuxPlantApp {
         document.getElementById('btnRefresh').onclick = () => {
             this.refreshSessions();
             this.toast('Sessions refreshed', 'info');
+        };
+        document.getElementById('btnLogout').onclick = async () => {
+            await fetch('/auth/logout', { method: 'POST' });
+            window.location.href = '/login';
         };
 
         const activeOnlyCheckbox = document.getElementById('filterActiveOnly');

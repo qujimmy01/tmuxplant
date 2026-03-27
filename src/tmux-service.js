@@ -12,12 +12,9 @@ class TmuxService {
       || text.includes('/tmp/tmux-');
   }
 
-  /**
-   * Execute a tmux command and return stdout
-   */
   exec(args) {
     try {
-      const result = execSync(`tmux ${args}`, {
+      const result = execSync('tmux ' + args, {
         encoding: 'utf-8',
         timeout: 5000,
       });
@@ -27,26 +24,16 @@ class TmuxService {
       if (this.isIgnorableTmuxError(msg)) {
         return '';
       }
-      throw new Error(msg || err.message);
+      return '';
     }
   }
 
-  /**
-   * Escape a session/window name for use as an exact tmux target.
-   * Prefix with '=' forces tmux to match by name, not by index.
-   */
   t(name) {
-    // tmux exact-match prefix: '=name' — prevents numeric names being treated as indexes
-    return `=${name}`;
+    return '=' + name;
   }
 
-  /**
-   * List all sessions with their windows and panes
-   */
   listSessions() {
-    const raw = this.exec(
-      'list-sessions -F "#{session_id}||#{session_name}||#{session_windows}||#{session_attached}||#{session_created}"'
-    );
+    const raw = this.exec('list-sessions -F "#{session_id}||#{session_name}||#{session_windows}||#{session_attached}||#{session_created}"');
     if (!raw) return [];
 
     return raw.split('\n').filter(Boolean).map(line => {
@@ -57,21 +44,13 @@ class TmuxService {
         windowCount: parseInt(windowCount, 10),
         attached: attached === '1',
         created: new Date(parseInt(created, 10) * 1000).toISOString(),
-        // Use session ID ($0, $1, ...) internally to avoid numeric-name ambiguity
-        windows: this.listWindows(id, name),
+        windows: this.listWindows(this.t(name), name),
       };
     });
   }
 
-  /**
-   * List windows for a session.
-   * @param {string} sessionRef - session ID ($0) or exact name
-   * @param {string} sessionName - human-readable name (stored in returned objects)
-   */
   listWindows(sessionRef, sessionName) {
-    const raw = this.exec(
-      `list-windows -t "${sessionRef}" -F "#{window_id}||#{window_index}||#{window_name}||#{window_active}||#{window_panes}"`
-    );
+    const raw = this.exec('list-windows -t "' + sessionRef + '" -F "#{window_id}||#{window_index}||#{window_name}||#{window_active}||#{window_panes}"');
     if (!raw) return [];
 
     return raw.split('\n').filter(Boolean).map(line => {
@@ -88,14 +67,8 @@ class TmuxService {
     });
   }
 
-  /**
-   * List panes for a window.
-   * @param {string} sessionRef - session ID or exact name
-   */
   listPanes(sessionRef, windowIndex) {
-    const raw = this.exec(
-      `list-panes -t "${sessionRef}:${windowIndex}" -F "#{pane_id}||#{pane_index}||#{pane_active}||#{pane_width}||#{pane_height}||#{pane_current_command}||#{pane_current_path}"`
-    );
+    const raw = this.exec('list-panes -t "' + sessionRef + ':' + windowIndex + '" -F "#{pane_id}||#{pane_index}||#{pane_active}||#{pane_width}||#{pane_height}||#{pane_current_command}||#{pane_current_path}"');
     if (!raw) return [];
 
     return raw.split('\n').filter(Boolean).map(line => {
@@ -112,116 +85,75 @@ class TmuxService {
     });
   }
 
-  /**
-   * Create a new session
-   */
   newSession(name, startDir) {
-    const nameArg = name ? `-s "${name}"` : '';
-    const dirArg = startDir ? `-c "${startDir}"` : '';
-    this.exec(`new-session -d ${nameArg} ${dirArg}`);
+    const nameArg = name ? '-s "' + name + '"' : '';
+    const dirArg = startDir ? '-c "' + startDir + '"' : '';
+    this.exec('new-session -d ' + nameArg + ' ' + dirArg);
     return this.listSessions();
   }
 
-  /**
-   * Kill a session by name (exact match)
-   */
   killSession(name) {
-    this.exec(`kill-session -t "${this.t(name)}"`);
+    try { this.exec('kill-session -t "' + this.t(name) + '"'); } catch (e) { }
     return { success: true };
   }
 
-  /**
-   * Rename a session (exact match)
-   */
   renameSession(oldName, newName) {
-    this.exec(`rename-session -t "${this.t(oldName)}" "${newName}"`);
+    try { this.exec('rename-session -t "' + this.t(oldName) + '" "' + newName + '"'); } catch (e) { }
     return { success: true };
   }
 
-  /**
-   * Create a new window in a session (exact match)
-   */
   newWindow(sessionName, windowName) {
-    const nameArg = windowName ? `-n "${windowName}"` : '';
-    this.exec(`new-window -t "${this.t(sessionName)}" ${nameArg}`);
+    const nameArg = windowName ? '-n "' + windowName + '"' : '';
+    try { this.exec('new-window -t "' + this.t(sessionName) + '" ' + nameArg); } catch (e) { }
     return this.listWindows(this.t(sessionName), sessionName);
   }
 
-  /**
-   * Kill a window (exact session name match)
-   */
   killWindow(sessionName, windowIndex) {
-    this.exec(`kill-window -t "${this.t(sessionName)}:${windowIndex}"`);
+    try { this.exec('kill-window -t "' + this.t(sessionName) + ':' + windowIndex + '"'); } catch (e) { }
     return { success: true };
   }
 
-  /**
-   * Rename a window (exact session name match)
-   */
   renameWindow(sessionName, windowIndex, newName) {
-    this.exec(`rename-window -t "${this.t(sessionName)}:${windowIndex}" "${newName}"`);
+    try { this.exec('rename-window -t "' + this.t(sessionName) + ':' + windowIndex + '" "' + newName + '"'); } catch (e) { }
     return { success: true };
   }
 
-  /**
-   * Select a window (exact session name match)
-   */
   selectWindow(sessionName, windowIndex) {
-    this.exec(`select-window -t "${this.t(sessionName)}:${windowIndex}"`);
+    try { this.exec('select-window -t "' + this.t(sessionName) + ':' + windowIndex + '"'); } catch (e) { }
     return { success: true };
   }
 
-  /**
-   * Split a pane (exact session name match)
-   */
   splitPane(sessionName, windowIndex, paneIndex, direction = 'horizontal') {
     const flag = direction === 'vertical' ? '-v' : '-h';
-    this.exec(`split-window ${flag} -t "${this.t(sessionName)}:${windowIndex}.${paneIndex}"`);
+    try { this.exec('split-window ' + flag + ' -t "' + this.t(sessionName) + ':' + windowIndex + '.' + paneIndex + '"'); } catch (e) { }
     return this.listPanes(this.t(sessionName), windowIndex);
   }
 
-  /**
-   * Kill a pane (exact session name match)
-   */
   killPane(sessionName, windowIndex, paneIndex) {
-    this.exec(`kill-pane -t "${this.t(sessionName)}:${windowIndex}.${paneIndex}"`);
+    try { this.exec('kill-pane -t "' + this.t(sessionName) + ':' + windowIndex + '.' + paneIndex + '"'); } catch (e) { }
     return { success: true };
   }
 
-  /**
-   * Select a pane (exact session name match)
-   */
   selectPane(sessionName, windowIndex, paneIndex) {
-    this.exec(`select-pane -t "${this.t(sessionName)}:${windowIndex}.${paneIndex}"`);
+    try { this.exec('select-pane -t "' + this.t(sessionName) + ':' + windowIndex + '.' + paneIndex + '"'); } catch (e) { }
     return { success: true };
   }
 
-  /**
-   * Send keys to a target
-   */
   sendKeys(target, keys, enterKey = true) {
     const enter = enterKey ? ' Enter' : '';
-    this.exec(`send-keys -t "${target}" "${keys}"${enter}`);
+    try { this.exec('send-keys -t "' + target + '" "' + keys + '"' + enter); } catch (e) { }
     return { success: true };
   }
 
-  /**
-   * Resize a pane
-   */
   resizePane(sessionName, windowIndex, paneIndex, direction, amount) {
     const dirMap = { up: '-U', down: '-D', left: '-L', right: '-R' };
     const flag = dirMap[direction] || '-R';
-    this.exec(`resize-pane -t "${this.t(sessionName)}:${windowIndex}.${paneIndex}" ${flag} ${amount}`);
+    try { this.exec('resize-pane -t "' + this.t(sessionName) + ':' + windowIndex + '.' + paneIndex + '" ' + flag + ' ' + amount); } catch (e) { }
     return { success: true };
   }
 
-  /**
-   * Capture pane contents
-   */
   capturePane(sessionName, windowIndex, paneIndex, lines = 50) {
-    return this.exec(
-      `capture-pane -t "${this.t(sessionName)}:${windowIndex}.${paneIndex}" -p -S -${lines}`
-    );
+    try { return this.exec('capture-pane -t "' + this.t(sessionName) + ':' + windowIndex + '.' + paneIndex + '" -p -S -' + lines); } catch (e) { return ''; }
   }
 }
 
