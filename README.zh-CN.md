@@ -18,6 +18,8 @@
 
 TmuxPlant 是一个基于 Web 的 [tmux](https://github.com/tmux/tmux) 管理界面，直接连接本机的 tmux 服务器，在浏览器中提供实时交互式终端和完整的 session、window、pane 管理能力。
 
+![1774699576998](image/README/1774699576998.png)
+
 ### 功能特性
 
 - 🌲 **会话树** — 展开式树形结构，实时显示 session → window → pane 状态
@@ -33,10 +35,10 @@ TmuxPlant 是一个基于 Web 的 [tmux](https://github.com/tmux/tmux) 管理界
 
 ### 环境要求
 
-| 依赖 | 版本 |
-|---|---|
-| Node.js | ≥ 16 |
-| tmux | ≥ 3.x |
+| 依赖                        | 版本                         |
+| --------------------------- | ---------------------------- |
+| Node.js                     | ≥ 16                        |
+| tmux                        | ≥ 3.x                       |
 | build-essential / Xcode CLT | （编译 node-pty 原生模块用） |
 
 ### 快速启动
@@ -67,6 +69,7 @@ node scripts/set-password.js
 ```
 
 该交互工具会：
+
 - 提示输入新用户名和密码（输入时以 `*` 掩码显示）
 - 要求二次确认密码，防止误输
 - 以 bcrypt（cost=12）哈希加密写入 `data/auth.json`，**从不保存明文密码**
@@ -86,27 +89,27 @@ node scripts/set-password.js
 
 **安全特性一览：**
 
-| 特性 | 说明 |
-|---|---|
-| 密码存储 | bcrypt 哈希（cost=12），从不保存明文 |
-| Session Cookie | HttpOnly、SameSite=lax、有效期 8 小时 |
-| 暴力破解防护 | 同一 IP 失败 10 次后锁定 15 分钟 |
-| 用户枚举防护 | 用户名比对采用常量时间算法，防止时序攻击 |
-| Session 固定攻击防护 | 登录成功后自动更换 Session ID |
-| WebSocket 保护 | 升级握手时校验 Session Cookie，未登录返回 401 |
-| 前端自动跳转 | API 返回 401 时浏览器自动跳转到 `/login` |
+| 特性                 | 说明                                          |
+| -------------------- | --------------------------------------------- |
+| 密码存储             | bcrypt 哈希（cost=12），从不保存明文          |
+| Session Cookie       | HttpOnly、SameSite=lax、有效期 8 小时         |
+| 暴力破解防护         | 同一 IP 失败 10 次后锁定 15 分钟              |
+| 用户枚举防护         | 用户名比对采用常量时间算法，防止时序攻击      |
+| Session 固定攻击防护 | 登录成功后自动更换 Session ID                 |
+| WebSocket 保护       | 升级握手时校验 Session Cookie，未登录返回 401 |
+| 前端自动跳转         | API 返回 401 时浏览器自动跳转到 `/login`    |
 
 ### 使用说明
 
-| 操作 | 方式 |
-|---|---|
-| 打开终端 | 点击侧边栏树中任意 pane |
-| 创建 session | 点击顶部 **New Session** 按钮或右键 |
-| 重命名 | 双击 session 或 window 节点 |
-| 分割 pane | 右键 window/pane → 水平分割 / 垂直分割 |
-| 删除 | 右键 → Kill Session / Window / Pane |
-| 广播命令 | 点击顶部 **Broadcast** 按钮 |
-| 关闭终端标签 | 点击标签上的 `×` |
+| 操作         | 方式                                     |
+| ------------ | ---------------------------------------- |
+| 打开终端     | 点击侧边栏树中任意 pane                  |
+| 创建 session | 点击顶部**New Session** 按钮或右键 |
+| 重命名       | 双击 session 或 window 节点              |
+| 分割 pane    | 右键 window/pane → 水平分割 / 垂直分割  |
+| 删除         | 右键 → Kill Session / Window / Pane     |
+| 广播命令     | 点击顶部**Broadcast** 按钮         |
+| 关闭终端标签 | 点击标签上的 `×`                      |
 
 ### 部署到 Linux
 

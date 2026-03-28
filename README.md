@@ -18,6 +18,8 @@
 
 TmuxPlant is a web-based management interface for [tmux](https://github.com/tmux/tmux). It connects to the local tmux server and provides a real-time interactive terminal along with comprehensive session, window, and pane management — all from your browser.
 
+![1774699576998](image/README/1774699576998.png)
+
 ### Features
 
 - 🌲 **Session Tree** — Expandable tree view: sessions → windows → panes with live status
@@ -33,10 +35,10 @@ TmuxPlant is a web-based management interface for [tmux](https://github.com/tmux
 
 ### Requirements
 
-| Dependency | Version |
-|---|---|
-| Node.js | ≥ 16 |
-| tmux | ≥ 3.x |
+| Dependency                  | Version                  |
+| --------------------------- | ------------------------ |
+| Node.js                     | ≥ 16                    |
+| tmux                        | ≥ 3.x                   |
 | build-essential / Xcode CLT | (for compiling node-pty) |
 
 ### Quick Start
@@ -67,6 +69,7 @@ node scripts/set-password.js
 ```
 
 This interactive tool:
+
 - Prompts for a new username and password (input is masked)
 - Requires password confirmation
 - Stores a bcrypt hash (cost=12) in `data/auth.json` — **never plain text**
@@ -86,27 +89,27 @@ This interactive tool:
 
 **Security features:**
 
-| Feature | Detail |
-|---|---|
-| Password storage | bcrypt hash (cost=12), never plain text |
-| Session cookie | HttpOnly, SameSite=lax, 8-hour expiry |
-| Brute-force protection | IP locked out for 15 min after 10 failed attempts |
-| User enumeration prevention | Constant-time username comparison |
-| Session fixation prevention | Session ID regenerated on successful login |
-| WebSocket protection | Upgrade handshake validates session cookie |
-| Auto redirect | 401 responses redirect browser to `/login` automatically |
+| Feature                     | Detail                                                     |
+| --------------------------- | ---------------------------------------------------------- |
+| Password storage            | bcrypt hash (cost=12), never plain text                    |
+| Session cookie              | HttpOnly, SameSite=lax, 8-hour expiry                      |
+| Brute-force protection      | IP locked out for 15 min after 10 failed attempts          |
+| User enumeration prevention | Constant-time username comparison                          |
+| Session fixation prevention | Session ID regenerated on successful login                 |
+| WebSocket protection        | Upgrade handshake validates session cookie                 |
+| Auto redirect               | 401 responses redirect browser to `/login` automatically |
 
 ### Usage
 
-| Action | How |
-|---|---|
-| Open terminal | Click any pane in the sidebar tree |
-| Create session | Click **New Session** in the header or right-click |
-| Rename | Double-click a session or window node |
-| Split pane | Right-click window or pane → Split Horizontal / Vertical |
-| Kill | Right-click → Kill Session / Window / Pane |
-| Broadcast command | Click **Broadcast** in the header |
-| Close tab | Click `×` on the terminal tab |
+| Action            | How                                                       |
+| ----------------- | --------------------------------------------------------- |
+| Open terminal     | Click any pane in the sidebar tree                        |
+| Create session    | Click**New Session** in the header or right-click   |
+| Rename            | Double-click a session or window node                     |
+| Split pane        | Right-click window or pane → Split Horizontal / Vertical |
+| Kill              | Right-click → Kill Session / Window / Pane               |
+| Broadcast command | Click**Broadcast** in the header                    |
+| Close tab         | Click `×` on the terminal tab                          |
 
 ### Deploy on Linux
 
@@ -139,22 +142,22 @@ tmux
 
 ### API Reference
 
-| Method | Endpoint | Auth | Description |
-|---|---|---|---|
-| GET | `/login` | — | Login page |
-| POST | `/auth/login` | — | Submit credentials, start session |
-| POST | `/auth/logout` | ✅ | Destroy session |
-| GET | `/auth/status` | — | Check session status |
-| GET | `/api/sessions` | ✅ | List all sessions with full tree |
-| POST | `/api/sessions` | ✅ | Create a new session |
-| DELETE | `/api/sessions/:name` | ✅ | Kill a session |
-| PUT | `/api/sessions/:name` | ✅ | Rename a session |
-| POST | `/api/sessions/:name/windows` | ✅ | Create a window |
-| DELETE | `/api/sessions/:name/windows/:i` | ✅ | Kill a window |
-| PUT | `/api/sessions/:name/windows/:i` | ✅ | Rename a window |
-| POST | `/api/sessions/:name/windows/:i/split` | ✅ | Split a pane |
-| POST | `/api/broadcast` | ✅ | Broadcast keys to multiple panes |
-| WS | `/ws/terminal` | ✅ | Real-time terminal WebSocket |
+| Method | Endpoint                                 | Auth | Description                       |
+| ------ | ---------------------------------------- | ---- | --------------------------------- |
+| GET    | `/login`                               | —   | Login page                        |
+| POST   | `/auth/login`                          | —   | Submit credentials, start session |
+| POST   | `/auth/logout`                         | ✅   | Destroy session                   |
+| GET    | `/auth/status`                         | —   | Check session status              |
+| GET    | `/api/sessions`                        | ✅   | List all sessions with full tree  |
+| POST   | `/api/sessions`                        | ✅   | Create a new session              |
+| DELETE | `/api/sessions/:name`                  | ✅   | Kill a session                    |
+| PUT    | `/api/sessions/:name`                  | ✅   | Rename a session                  |
+| POST   | `/api/sessions/:name/windows`          | ✅   | Create a window                   |
+| DELETE | `/api/sessions/:name/windows/:i`       | ✅   | Kill a window                     |
+| PUT    | `/api/sessions/:name/windows/:i`       | ✅   | Rename a window                   |
+| POST   | `/api/sessions/:name/windows/:i/split` | ✅   | Split a pane                      |
+| POST   | `/api/broadcast`                       | ✅   | Broadcast keys to multiple panes  |
+| WS     | `/ws/terminal`                         | ✅   | Real-time terminal WebSocket      |
 
 ### License
 
